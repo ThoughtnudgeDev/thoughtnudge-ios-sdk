@@ -202,8 +202,8 @@ extension ThoughtNudgeSDK: UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound, .badge])
     }
 
-    /// Called when user TAPS the notification.
-    /// Reports "clicked" event.
+    /// Called when user interacts with the notification (tap or dismiss).
+    /// Reports "clicked" on tap, "read" on dismiss.
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -213,7 +213,11 @@ extension ThoughtNudgeSDK: UNUserNotificationCenterDelegate {
         let messageId = userInfo["tn_message_id"] as? String ?? ""
 
         if !messageId.isEmpty {
-            TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+            if response.actionIdentifier == UNNotificationDismissActionIdentifier {
+                TNWebhookReporter.reportEvent(eventType: "read", messageId: messageId)
+            } else {
+                TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+            }
         }
 
         completionHandler()
