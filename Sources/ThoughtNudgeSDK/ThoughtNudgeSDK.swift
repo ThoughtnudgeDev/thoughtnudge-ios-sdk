@@ -83,6 +83,17 @@ import UserNotifications
     private let fcmTokenKey = "tn_fcm_token"
     private let messageIdKey = "tn_message_id"
 
+    // ThoughtNudge Firebase project credentials (hardcoded).
+    // On iOS, Firebase Messaging is bound to the default FirebaseApp. The SDK
+    // therefore configures the default FirebaseApp with ThoughtNudge's
+    // credentials. If your iOS app uses Firebase for its own purposes
+    // (Analytics, Crashlytics, etc.), configure it as a SECONDARY named app
+    // using FirebaseApp.configure(name:options:).
+    private let tnFirebaseProjectId = "python-fcm-test-52411"
+    private let tnFirebaseGoogleAppId = "1:428970762530:ios:41c334a96967cff444c57b"
+    private let tnFirebaseApiKey = "AIzaSyC-ExiAw4OELxkU0Y1iqSWNNNYMSZiZ0i4"
+    private let tnFirebaseGcmSenderId = "428970762530"
+
     private var initialized = false
     private var pendingUserId: String?
 
@@ -98,6 +109,9 @@ import UserNotifications
         self.apiBaseUrl = environment.url
         self.appId = appId
         self.userId = UserDefaults.standard.string(forKey: userIdKey) ?? ""
+
+        configureFirebaseIfNeeded()
+
         self.initialized = true
 
         print("[ThoughtNudge] SDK initialized. appId=\(appId), env=\(environment)")
@@ -213,6 +227,25 @@ import UserNotifications
     }
 
     // MARK: - Internal
+
+    /// Configure the default FirebaseApp with ThoughtNudge credentials if
+    /// no default app has been set up yet. This keeps FCM routed through
+    /// ThoughtNudge's Firebase project. The client's own Firebase usage
+    /// (if any) should be configured as a secondary named app.
+    private func configureFirebaseIfNeeded() {
+        if FirebaseApp.app() != nil {
+            print("[ThoughtNudge] Default FirebaseApp already configured — leaving as-is")
+            return
+        }
+        let options = FirebaseOptions(
+            googleAppID: tnFirebaseGoogleAppId,
+            gcmSenderID: tnFirebaseGcmSenderId
+        )
+        options.apiKey = tnFirebaseApiKey
+        options.projectID = tnFirebaseProjectId
+        FirebaseApp.configure(options: options)
+        print("[ThoughtNudge] Default FirebaseApp configured with ThoughtNudge credentials")
+    }
 
     private func requestPermissionAndRegister() {
         UNUserNotificationCenter.current().requestAuthorization(
