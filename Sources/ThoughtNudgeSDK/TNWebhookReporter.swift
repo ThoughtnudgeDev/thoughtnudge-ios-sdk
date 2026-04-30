@@ -16,7 +16,8 @@ internal class TNWebhookReporter {
                 "event_type": eventType,
                 "message_id": messageId,
                 "user_id": sdk.userId,
-                "platform": "ios"
+                "platform": "ios",
+                "app_id": sdk.appId
             ]
         )
         print("[ThoughtNudge] Reported event: \(eventType) for message \(messageId)")
