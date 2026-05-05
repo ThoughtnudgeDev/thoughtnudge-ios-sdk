@@ -186,7 +186,9 @@ import UserNotifications
     }
 
     /// Handle a ThoughtNudge notification response (user tapped or dismissed).
-    /// Reports "clicked" on tap, "read" on dismiss.
+    /// Reports "clicked" on tap and opens the `cta_url` deep link if present;
+    /// reports "read" on dismiss.
+    @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func handleNotificationResponse(
         _ response: UNNotificationResponse,
         completionHandler: @escaping () -> Void
@@ -197,9 +199,31 @@ import UserNotifications
                 TNWebhookReporter.reportEvent(eventType: "read", messageId: messageId)
             } else {
                 TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+                openCtaUrlIfPresent(userInfo: userInfo)
             }
         }
         completionHandler()
+    }
+
+    /// If the notification payload carries a `cta_url`, ask iOS to open it.
+    /// For custom URL schemes registered by the host app (e.g. `chalo://...`),
+    /// this routes through the app's `application(_:open:options:)` handler so
+    /// the client's existing deep-link routing navigates to the right screen.
+    /// For universal-link HTTPS URLs, iOS routes via the appropriate path.
+    @available(iOSApplicationExtension, unavailable)
+    private func openCtaUrlIfPresent(userInfo: [AnyHashable: Any]) {
+        guard let ctaUrlString = userInfo["cta_url"] as? String,
+              !ctaUrlString.isEmpty,
+              let ctaUrl = URL(string: ctaUrlString) else {
+            return
+        }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(ctaUrl, options: [:]) { success in
+                if !success {
+                    print("[ThoughtNudge] Failed to open cta_url: \(ctaUrlString) — make sure the URL scheme is declared in Info.plist's CFBundleURLTypes and your AppDelegate handles application(_:open:options:)")
+                }
+            }
+        }
     }
 
     // MARK: - Internal
