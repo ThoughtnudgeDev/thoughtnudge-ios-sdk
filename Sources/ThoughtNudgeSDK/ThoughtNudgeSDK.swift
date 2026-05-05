@@ -87,6 +87,7 @@ import UserNotifications
 
     /// Initialize the ThoughtNudge SDK.
     /// Call once from `application(_:didFinishLaunchingWithOptions:)`.
+    @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only — use ThoughtNudgeNotificationService inside Notification Service Extensions")
     @objc public func initialize(appId: String, environment: Environment = .production) {
         self.apiBaseUrl = environment.url
         self.appId = appId
@@ -107,6 +108,7 @@ import UserNotifications
 
     /// Associate a user with this device.
     /// If called before `initialize()`, the call is queued and replayed.
+    @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func identify(userId: String) {
         if !initialized {
             print("[ThoughtNudge] identify() called before initialize() — queued")
@@ -202,6 +204,7 @@ import UserNotifications
 
     // MARK: - Internal
 
+    @available(iOSApplicationExtension, unavailable)
     private func requestPermissionAndRegister() {
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .badge, .sound]
