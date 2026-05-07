@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'ThoughtNudgeSDK'
-  s.version          = '2.3.0-beta9'
+  s.version          = '2.3.0-beta10'
   s.summary          = 'ThoughtNudge Push Notification SDK for iOS'
   s.description      = <<-DESC
     iOS SDK for ThoughtNudge push notifications. Registers for APNs directly

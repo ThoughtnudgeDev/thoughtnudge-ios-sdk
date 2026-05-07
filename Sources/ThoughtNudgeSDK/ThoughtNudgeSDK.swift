@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import UserNotifications
+import os.log
 
 /// ThoughtNudge Push Notification SDK for iOS.
 ///
@@ -52,6 +53,21 @@ import UserNotifications
 @objc public class ThoughtNudgeSDK: NSObject {
 
     @objc public static let shared = ThoughtNudgeSDK()
+
+    /// SDK version — logged on init() so you can verify in Console.app
+    /// which build is actually running on the device.
+    @objc public static let sdkVersion = "2.3.0-beta10"
+
+    private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
+
+    /// Logs to BOTH the Xcode debug console (via print) AND the system log
+    /// (via os_log). System log entries are visible in Console.app even
+    /// when Xcode is not attached — essential for cold-launch debugging
+    /// where the debugger has detached.
+    private func tnLog(_ message: String) {
+        print("[ThoughtNudge] \(message)")
+        os_log("[ThoughtNudge] %{public}@", log: Self.osLog, type: .info, message)
+    }
 
     /// Target ThoughtNudge environment.
     @objc public enum Environment: Int {
@@ -118,7 +134,7 @@ import UserNotifications
         self.userId = UserDefaults.standard.string(forKey: userIdKey) ?? ""
         self.initialized = true
 
-        print("[ThoughtNudge] SDK initialized. appId=\(appId), env=\(environment)")
+        tnLog("SDK initialized. appId=\(appId), env=\(environment)")
 
         if let pending = pendingUserId {
             pendingUserId = nil
@@ -135,13 +151,13 @@ import UserNotifications
     @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func identify(userId: String) {
         if !initialized {
-            print("[ThoughtNudge] identify() called before initialize() — queued")
+            tnLog("identify() called before initialize() — queued")
             pendingUserId = userId
             return
         }
         self.userId = userId
         UserDefaults.standard.set(userId, forKey: userIdKey)
-        print("[ThoughtNudge] User identified: \(userId)")
+        tnLog("User identified: \(userId)")
         requestPermissionAndRegister()
     }
 
@@ -159,20 +175,20 @@ import UserNotifications
     @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func handleColdLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         let optionKeys = launchOptions?.keys.map { String(describing: $0) } ?? []
-        print("[ThoughtNudge] handleColdLaunch invoked. launchOptions keys: \(optionKeys)")
+        tnLog("handleColdLaunch invoked. launchOptions keys: \(optionKeys)")
 
         guard let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] else {
-            print("[ThoughtNudge] handleColdLaunch — launchOptions[.remoteNotification] is nil. App was NOT launched from a notification tap (or another framework consumed it before us — see Firebase swizzling notes).")
+            tnLog("handleColdLaunch — launchOptions[.remoteNotification] is nil. App was NOT launched from a notification tap (or another framework consumed it before us — see Firebase swizzling notes).")
             return
         }
         let userInfoKeys = userInfo.keys.compactMap { $0 as? String }
-        print("[ThoughtNudge] handleColdLaunch — remoteNotification present. userInfo keys: \(userInfoKeys)")
+        tnLog("handleColdLaunch — remoteNotification present. userInfo keys: \(userInfoKeys)")
 
         guard let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty else {
-            print("[ThoughtNudge] handleColdLaunch — no tn_message_id in launch userInfo. Either the cold-launch notification wasn't a ThoughtNudge push, or the userInfo was stripped before this method ran.")
+            tnLog("handleColdLaunch — no tn_message_id in launch userInfo. Either the cold-launch notification wasn't a ThoughtNudge push, or the userInfo was stripped before this method ran.")
             return
         }
-        print("[ThoughtNudge] Cold-launch from notification tap: \(messageId)")
+        tnLog("Cold-launch from notification tap: \(messageId)")
         lastColdLaunchMessageId = messageId
         TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
         openCtaUrlIfPresent(userInfo: userInfo)
@@ -190,7 +206,7 @@ import UserNotifications
         userId = ""
         UserDefaults.standard.removeObject(forKey: userIdKey)
         UserDefaults.standard.removeObject(forKey: apnsTokenKey)
-        print("[ThoughtNudge] User logged out, token deregistered")
+        tnLog("User logged out, token deregistered")
     }
 
     /// Report a custom event to ThoughtNudge backend.
@@ -208,7 +224,7 @@ import UserNotifications
     ) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         UserDefaults.standard.set(token, forKey: apnsTokenKey)
-        print("[ThoughtNudge] APNs token received: \(token.prefix(20))...")
+        tnLog("APNs token received: \(token.prefix(20))...")
         if !userId.isEmpty {
             registerToken(token: token)
         }
@@ -219,7 +235,7 @@ import UserNotifications
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("[ThoughtNudge] APNs registration failed: \(error.localizedDescription)")
+        tnLog("APNs registration failed: \(error.localizedDescription)")
     }
 
     // MARK: - Notification Forwarding API
@@ -257,7 +273,7 @@ import UserNotifications
             } else if messageId == lastColdLaunchMessageId {
                 // Cold-launch handler already reported this clicked + opened the deep link.
                 // Skip to avoid double-reporting and re-opening.
-                print("[ThoughtNudge] handleNotificationResponse — already handled \(messageId) via cold-launch, skipping")
+                tnLog("handleNotificationResponse — already handled \(messageId) via cold-launch, skipping")
                 lastColdLaunchMessageId = nil
             } else {
                 TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
@@ -279,22 +295,22 @@ import UserNotifications
     @available(iOSApplicationExtension, unavailable)
     private func openCtaUrlIfPresent(userInfo: [AnyHashable: Any]) {
         guard let ctaUrlString = userInfo["cta_url"] as? String else {
-            print("[ThoughtNudge] cta_url not present in payload — skipping deep-link open")
+            tnLog("cta_url not present in payload — skipping deep-link open")
             return
         }
         guard !ctaUrlString.isEmpty else {
-            print("[ThoughtNudge] cta_url is empty — skipping deep-link open")
+            tnLog("cta_url is empty — skipping deep-link open")
             return
         }
         guard let ctaUrl = URL(string: ctaUrlString) else {
-            print("[ThoughtNudge] cta_url is not a parseable URL: \(ctaUrlString)")
+            tnLog("cta_url is not a parseable URL: \(ctaUrlString)")
             return
         }
         let messageId = (userInfo[messageIdKey] as? String) ?? ""
 
         // Path 1: host-app callback (preferred when set)
         if let callback = onDeepLink {
-            print("[ThoughtNudge] Forwarding cta_url to onDeepLink callback: \(ctaUrlString)")
+            tnLog("Forwarding cta_url to onDeepLink callback: \(ctaUrlString)")
             DispatchQueue.main.async {
                 callback(ctaUrl, messageId)
             }
@@ -302,16 +318,16 @@ import UserNotifications
         }
 
         // Path 2: fallback — ask iOS to open the URL
-        print("[ThoughtNudge] No onDeepLink callback set — falling back to UIApplication.shared.open: \(ctaUrlString)")
-        DispatchQueue.main.async {
+        tnLog("No onDeepLink callback set — falling back to UIApplication.shared.open: \(ctaUrlString)")
+        DispatchQueue.main.async { [weak self] in
             UIApplication.shared.open(ctaUrl, options: [:]) { success in
                 if success {
-                    print("[ThoughtNudge] UIApplication.open returned success. If your app still didn't navigate, scene(_:openURLContexts:) is missing or your URL router didn't recognise the URL.")
+                    self?.tnLog("UIApplication.open returned success. If your app still didn't navigate, scene(_:openURLContexts:) is missing or your URL router didn't recognise the URL.")
                 } else {
-                    print("[ThoughtNudge] UIApplication.open returned FALSE for cta_url: \(ctaUrlString)")
-                    print("[ThoughtNudge]   — declare the URL scheme in your Info.plist under CFBundleURLTypes")
-                    print("[ThoughtNudge]   — implement scene(_:openURLContexts:) in your SceneDelegate (or application(_:open:options:) for non-scene apps)")
-                    print("[ThoughtNudge]   — OR set ThoughtNudgeSDK.shared.onDeepLink to handle URLs programmatically")
+                    self?.tnLog("UIApplication.open returned FALSE for cta_url: \(ctaUrlString)")
+                    self?.tnLog("  — declare the URL scheme in your Info.plist under CFBundleURLTypes")
+                    self?.tnLog("  — implement scene(_:openURLContexts:) in your SceneDelegate (or application(_:open:options:) for non-scene apps)")
+                    self?.tnLog("  — OR set ThoughtNudgeSDK.shared.onDeepLink to handle URLs programmatically")
                 }
             }
         }
@@ -323,13 +339,13 @@ import UserNotifications
     private func requestPermissionAndRegister() {
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .badge, .sound]
-        ) { granted, error in
+        ) { [weak self] granted, error in
             if let error = error {
-                print("[ThoughtNudge] Permission error: \(error)")
+                self?.tnLog("Permission error: \(error)")
                 return
             }
             guard granted else {
-                print("[ThoughtNudge] Push permission denied by user")
+                self?.tnLog("Push permission denied by user")
                 return
             }
             DispatchQueue.main.async {
@@ -351,6 +367,6 @@ import UserNotifications
                 "app_id": appId
             ]
         )
-        print("[ThoughtNudge] APNs token registered with backend")
+        tnLog("APNs token registered with backend")
     }
 }
