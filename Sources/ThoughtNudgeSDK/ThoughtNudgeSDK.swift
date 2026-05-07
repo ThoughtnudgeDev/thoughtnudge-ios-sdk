@@ -139,10 +139,18 @@ import UserNotifications
     /// directly so `clicked` events fire and deep links open consistently.
     @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func handleColdLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+        let optionKeys = launchOptions?.keys.map { String(describing: $0) } ?? []
+        print("[ThoughtNudge] handleColdLaunch invoked. launchOptions keys: \(optionKeys)")
+
         guard let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] else {
+            print("[ThoughtNudge] handleColdLaunch — launchOptions[.remoteNotification] is nil. App was NOT launched from a notification tap (or another framework consumed it before us — see Firebase swizzling notes).")
             return
         }
+        let userInfoKeys = userInfo.keys.compactMap { $0 as? String }
+        print("[ThoughtNudge] handleColdLaunch — remoteNotification present. userInfo keys: \(userInfoKeys)")
+
         guard let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty else {
+            print("[ThoughtNudge] handleColdLaunch — no tn_message_id in launch userInfo. Either the cold-launch notification wasn't a ThoughtNudge push, or the userInfo was stripped before this method ran.")
             return
         }
         print("[ThoughtNudge] Cold-launch from notification tap: \(messageId)")
