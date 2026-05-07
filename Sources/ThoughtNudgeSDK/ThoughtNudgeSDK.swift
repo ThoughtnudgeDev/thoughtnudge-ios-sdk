@@ -63,7 +63,7 @@ import UserNotifications
             switch self {
             case .production:  return "https://api.thoughtnudge.com"
             case .staging:     return "https://staging-api.thoughtnudge.com"
-            case .development: return "https://integrations.thoughtnudge.com/event-service"
+            case .development: return "https://9twvb42p-8000.inc1.devtunnels.ms"
             }
         }
     }
