@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta13"
+    @objc public static let sdkVersion = "2.3.0-beta14"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -100,6 +100,14 @@ import os.log
     // after the app finishes launching) doesn't double-report.
     private var lastColdLaunchMessageId: String?
 
+    // Queues a cold-launch userInfo when handleColdLaunch fires before the
+    // SDK has been initialised (apiBaseUrl is empty). initialize() replays
+    // it once the SDK is ready. Necessary because in some SceneDelegate apps
+    // — particularly those with heavy KMP / async setup chains in
+    // AppDelegate.didFinishLaunching — SceneDelegate.scene(_:willConnectTo:)
+    // can fire before ThoughtNudgeSDK.shared.initialize completes.
+    private var pendingColdLaunchUserInfo: [AnyHashable: Any]?
+
     /// Set this from your AppDelegate to receive deep-link URLs directly,
     /// bypassing UIApplication.shared.open. Recommended for apps with a
     /// SceneDelegate that doesn't implement scene(_:openURLContexts:), or
@@ -140,6 +148,9 @@ import os.log
             pendingUserId = nil
             identify(userId: pending)
         }
+
+        // Replay any cold-launch click event that fired before init completed.
+        replayPendingColdLaunchIfNeeded()
 
         if !userId.isEmpty {
             requestPermissionAndRegister()
@@ -223,8 +234,27 @@ import os.log
         }
         tnLog("Cold-launch from notification tap (\(source)): \(messageId)")
         lastColdLaunchMessageId = messageId
-        TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+
+        // If the SDK hasn't been initialized yet (SceneDelegate ran before
+        // AppDelegate's initialize() completed), queue the click event for
+        // replay once initialize() runs. We still open the deep link
+        // immediately — that doesn't depend on apiBaseUrl.
+        if !initialized || apiBaseUrl.isEmpty {
+            tnLog("Cold-launch handler ran before SDK.initialize — queueing click event for replay")
+            pendingColdLaunchUserInfo = userInfo
+        } else {
+            TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+        }
         openCtaUrlIfPresent(userInfo: userInfo)
+    }
+
+    @available(iOSApplicationExtension, unavailable)
+    private func replayPendingColdLaunchIfNeeded() {
+        guard let userInfo = pendingColdLaunchUserInfo else { return }
+        pendingColdLaunchUserInfo = nil
+        guard let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty else { return }
+        tnLog("Replaying queued cold-launch click event after init: \(messageId)")
+        TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
     }
 
     /// Call on user logout to deregister the device token.
