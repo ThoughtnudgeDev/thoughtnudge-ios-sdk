@@ -84,6 +84,25 @@ import UserNotifications
     // after the app finishes launching) doesn't double-report.
     private var lastColdLaunchMessageId: String?
 
+    /// Set this from your AppDelegate to receive deep-link URLs directly,
+    /// bypassing UIApplication.shared.open. Recommended for apps with a
+    /// SceneDelegate that doesn't implement scene(_:openURLContexts:), or
+    /// apps where URL routing depends on a third-party SDK (Adjust, Branch,
+    /// etc.) that may not be initialized yet during didFinishLaunching.
+    ///
+    /// Example:
+    /// ```swift
+    /// ThoughtNudgeSDK.shared.onDeepLink = { url, messageId in
+    ///     // Route the URL using your existing deep-link router
+    ///     DeepLinkRouter.shared.handle(url)
+    /// }
+    /// ```
+    ///
+    /// If unset, the SDK falls back to UIApplication.shared.open(url),
+    /// which routes through scene(_:openURLContexts:) (SceneDelegate apps)
+    /// or application(_:open:options:) (non-scene apps).
+    public var onDeepLink: ((URL, String) -> Void)?
+
     private override init() {
         super.init()
     }
@@ -248,11 +267,15 @@ import UserNotifications
         completionHandler()
     }
 
-    /// If the notification payload carries a `cta_url`, ask iOS to open it.
-    /// For custom URL schemes registered by the host app (e.g. `chalo://...`),
-    /// this routes through the app's `application(_:open:options:)` handler so
-    /// the client's existing deep-link routing navigates to the right screen.
-    /// For universal-link HTTPS URLs, iOS routes via the appropriate path.
+    /// If the notification payload carries a `cta_url`, hand it to the client
+    /// for navigation. Preference order:
+    ///   1. `onDeepLink` callback if the host app set one (recommended for
+    ///      apps with a SceneDelegate that doesn't implement
+    ///      scene(_:openURLContexts:), or for apps where URL routing depends
+    ///      on a third-party SDK that may not be initialized when the SDK
+    ///      fires the deep link)
+    ///   2. UIApplication.shared.open(url) as fallback — routes through
+    ///      scene(_:openURLContexts:) or application(_:open:options:)
     @available(iOSApplicationExtension, unavailable)
     private func openCtaUrlIfPresent(userInfo: [AnyHashable: Any]) {
         guard let ctaUrlString = userInfo["cta_url"] as? String else {
@@ -267,15 +290,28 @@ import UserNotifications
             print("[ThoughtNudge] cta_url is not a parseable URL: \(ctaUrlString)")
             return
         }
-        print("[ThoughtNudge] Opening cta_url: \(ctaUrlString)")
+        let messageId = (userInfo[messageIdKey] as? String) ?? ""
+
+        // Path 1: host-app callback (preferred when set)
+        if let callback = onDeepLink {
+            print("[ThoughtNudge] Forwarding cta_url to onDeepLink callback: \(ctaUrlString)")
+            DispatchQueue.main.async {
+                callback(ctaUrl, messageId)
+            }
+            return
+        }
+
+        // Path 2: fallback — ask iOS to open the URL
+        print("[ThoughtNudge] No onDeepLink callback set — falling back to UIApplication.shared.open: \(ctaUrlString)")
         DispatchQueue.main.async {
             UIApplication.shared.open(ctaUrl, options: [:]) { success in
                 if success {
-                    print("[ThoughtNudge] UIApplication.open returned success for cta_url. If your app still didn't navigate, your AppDelegate's application(_:open:options:) (or SceneDelegate's scene(_:openURLContexts:)) is not routing this URL — check your deep-link router.")
+                    print("[ThoughtNudge] UIApplication.open returned success. If your app still didn't navigate, scene(_:openURLContexts:) is missing or your URL router didn't recognise the URL.")
                 } else {
                     print("[ThoughtNudge] UIApplication.open returned FALSE for cta_url: \(ctaUrlString)")
                     print("[ThoughtNudge]   — declare the URL scheme in your Info.plist under CFBundleURLTypes")
-                    print("[ThoughtNudge]   — implement application(_:open:options:) in your AppDelegate (or scene(_:openURLContexts:) for SceneDelegate apps)")
+                    print("[ThoughtNudge]   — implement scene(_:openURLContexts:) in your SceneDelegate (or application(_:open:options:) for non-scene apps)")
+                    print("[ThoughtNudge]   — OR set ThoughtNudgeSDK.shared.onDeepLink to handle URLs programmatically")
                 }
             }
         }
