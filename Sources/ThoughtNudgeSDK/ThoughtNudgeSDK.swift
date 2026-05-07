@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta12"
+    @objc public static let sdkVersion = "2.3.0-beta13"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -279,14 +279,26 @@ import os.log
     }
 
     /// Handle a ThoughtNudge notification while the app is in FOREGROUND.
-    /// Reports "delivered" and shows the notification banner.
+    /// Reports "delivered" (unless the NSE already did) and shows the
+    /// notification banner.
     @objc public func handleForegroundNotification(
         _ notification: UNNotification,
         completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
         if let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty {
-            TNWebhookReporter.reportEvent(eventType: "delivered", messageId: messageId)
+            // The NSE always runs first (mutable-content: 1) and reports
+            // delivered itself, then sets tn_delivered_reported on the
+            // forwarded userInfo. Skip here so we don't double-report when
+            // the app is in foreground (where willPresent also fires).
+            let alreadyReportedByNSE = (userInfo["tn_delivered_reported"] as? Bool) == true
+                || (userInfo["tn_delivered_reported"] as? Int) == 1
+                || (userInfo["tn_delivered_reported"] as? String) == "true"
+            if alreadyReportedByNSE {
+                tnLog("handleForegroundNotification — NSE already reported delivered for \(messageId), skipping")
+            } else {
+                TNWebhookReporter.reportEvent(eventType: "delivered", messageId: messageId)
+            }
         }
         completionHandler([.banner, .sound, .badge])
     }

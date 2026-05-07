@@ -66,7 +66,13 @@ import os.log
 
         // CRITICAL: preserve userInfo so the main app's UN delegate methods
         // can detect the notification and fire clicked / read events.
-        bestAttempt.userInfo = request.content.userInfo
+        // ALSO mark `tn_delivered_reported` so handleForegroundNotification
+        // in the main app skips its own delivered report — preventing the
+        // duplicate-delivered events seen when the app is in foreground
+        // (NSE always runs, willPresent also runs, both would fire delivered).
+        var passedUserInfo = request.content.userInfo
+        passedUserInfo["tn_delivered_reported"] = true
+        bestAttempt.userInfo = passedUserInfo
 
         let userInfo = request.content.userInfo
         os_log("NSE didReceive — keys: %{public}@", log: log, type: .info,
