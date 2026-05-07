@@ -79,6 +79,11 @@ import UserNotifications
     private var initialized = false
     private var pendingUserId: String?
 
+    // Tracks the messageId we already reported as clicked from a cold-launch
+    // notification, so handleNotificationResponse (which iOS may also call
+    // after the app finishes launching) doesn't double-report.
+    private var lastColdLaunchMessageId: String?
+
     private override init() {
         super.init()
     }
@@ -119,6 +124,31 @@ import UserNotifications
         UserDefaults.standard.set(userId, forKey: userIdKey)
         print("[ThoughtNudge] User identified: \(userId)")
         requestPermissionAndRegister()
+    }
+
+    /// Handle a notification tap that launched the app from a killed state.
+    /// Call from `application(_:didFinishLaunchingWithOptions:)` with the
+    /// launchOptions dictionary you receive there.
+    ///
+    /// When the app is killed and the user taps a notification, iOS launches
+    /// the app and the notification's userInfo is delivered via
+    /// `launchOptions[.remoteNotification]`. The `userNotificationCenter
+    /// (_:didReceive:)` callback may also fire later, but its delivery
+    /// during cold launch is unreliable in apps that mix Firebase Messaging
+    /// swizzling with custom delegates. This method handles that path
+    /// directly so `clicked` events fire and deep links open consistently.
+    @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
+    @objc public func handleColdLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
+        guard let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] else {
+            return
+        }
+        guard let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty else {
+            return
+        }
+        print("[ThoughtNudge] Cold-launch from notification tap: \(messageId)")
+        lastColdLaunchMessageId = messageId
+        TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
+        openCtaUrlIfPresent(userInfo: userInfo)
     }
 
     /// Call on user logout to deregister the device token.
@@ -197,6 +227,11 @@ import UserNotifications
         if let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty {
             if response.actionIdentifier == UNNotificationDismissActionIdentifier {
                 TNWebhookReporter.reportEvent(eventType: "read", messageId: messageId)
+            } else if messageId == lastColdLaunchMessageId {
+                // Cold-launch handler already reported this clicked + opened the deep link.
+                // Skip to avoid double-reporting and re-opening.
+                print("[ThoughtNudge] handleNotificationResponse — already handled \(messageId) via cold-launch, skipping")
+                lastColdLaunchMessageId = nil
             } else {
                 TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
                 openCtaUrlIfPresent(userInfo: userInfo)
