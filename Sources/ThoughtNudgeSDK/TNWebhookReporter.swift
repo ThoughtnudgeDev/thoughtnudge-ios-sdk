@@ -1,17 +1,27 @@
 import Foundation
+import os.log
 
 /// Internal HTTP client for reporting events back to ThoughtNudge backend.
 internal class TNWebhookReporter {
 
+    private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "webhook")
+
+    private static func tnLog(_ message: String) {
+        print("[ThoughtNudge] \(message)")
+        os_log("[ThoughtNudge] %{public}@", log: osLog, type: .info, message)
+    }
+
     static func reportEvent(eventType: String, messageId: String) {
         let sdk = ThoughtNudgeSDK.shared
         guard !sdk.apiBaseUrl.isEmpty else {
-            print("[ThoughtNudge] apiBaseUrl not set, skipping event report")
+            tnLog("apiBaseUrl not set, skipping event report (eventType=\(eventType), messageId=\(messageId))")
             return
         }
 
+        let urlString = "\(sdk.apiBaseUrl)/notifications/event/"
+        tnLog("reportEvent dispatching POST to \(urlString) — eventType=\(eventType), messageId=\(messageId), userId=\(sdk.userId), appId=\(sdk.appId)")
         post(
-            url: "\(sdk.apiBaseUrl)/notifications/event/",
+            url: urlString,
             body: [
                 "event_type": eventType,
                 "message_id": messageId,
@@ -20,12 +30,11 @@ internal class TNWebhookReporter {
                 "app_id": sdk.appId
             ]
         )
-        print("[ThoughtNudge] Reported event: \(eventType) for message \(messageId)")
     }
 
     static func post(url: String, body: [String: String]) {
         guard let requestUrl = URL(string: url) else {
-            print("[ThoughtNudge] Invalid URL: \(url)")
+            tnLog("Invalid URL: \(url)")
             return
         }
 
@@ -37,17 +46,19 @@ internal class TNWebhookReporter {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
-            print("[ThoughtNudge] JSON serialization error: \(error)")
+            tnLog("JSON serialization error: \(error)")
             return
         }
 
         URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
-                print("[ThoughtNudge] API error: \(error.localizedDescription)")
+                tnLog("API error for \(url): \(error.localizedDescription)")
                 return
             }
             if let httpResponse = response as? HTTPURLResponse {
-                print("[ThoughtNudge] API response: \(httpResponse.statusCode)")
+                tnLog("API response for \(url): HTTP \(httpResponse.statusCode)")
+            } else {
+                tnLog("API completed for \(url) with no HTTP response object")
             }
         }.resume()
     }
