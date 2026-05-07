@@ -63,7 +63,7 @@ import UserNotifications
             switch self {
             case .production:  return "https://api.thoughtnudge.com"
             case .staging:     return "https://staging-api.thoughtnudge.com"
-            case .development: return "https://9twvb42p-8000.inc1.devtunnels.ms"
+            case .development: return "http://13.235.167.184:8000"
             }
         }
     }
@@ -212,15 +212,27 @@ import UserNotifications
     /// For universal-link HTTPS URLs, iOS routes via the appropriate path.
     @available(iOSApplicationExtension, unavailable)
     private func openCtaUrlIfPresent(userInfo: [AnyHashable: Any]) {
-        guard let ctaUrlString = userInfo["cta_url"] as? String,
-              !ctaUrlString.isEmpty,
-              let ctaUrl = URL(string: ctaUrlString) else {
+        guard let ctaUrlString = userInfo["cta_url"] as? String else {
+            print("[ThoughtNudge] cta_url not present in payload — skipping deep-link open")
             return
         }
+        guard !ctaUrlString.isEmpty else {
+            print("[ThoughtNudge] cta_url is empty — skipping deep-link open")
+            return
+        }
+        guard let ctaUrl = URL(string: ctaUrlString) else {
+            print("[ThoughtNudge] cta_url is not a parseable URL: \(ctaUrlString)")
+            return
+        }
+        print("[ThoughtNudge] Opening cta_url: \(ctaUrlString)")
         DispatchQueue.main.async {
             UIApplication.shared.open(ctaUrl, options: [:]) { success in
-                if !success {
-                    print("[ThoughtNudge] Failed to open cta_url: \(ctaUrlString) — make sure the URL scheme is declared in Info.plist's CFBundleURLTypes and your AppDelegate handles application(_:open:options:)")
+                if success {
+                    print("[ThoughtNudge] UIApplication.open returned success for cta_url. If your app still didn't navigate, your AppDelegate's application(_:open:options:) (or SceneDelegate's scene(_:openURLContexts:)) is not routing this URL — check your deep-link router.")
+                } else {
+                    print("[ThoughtNudge] UIApplication.open returned FALSE for cta_url: \(ctaUrlString)")
+                    print("[ThoughtNudge]   — declare the URL scheme in your Info.plist under CFBundleURLTypes")
+                    print("[ThoughtNudge]   — implement application(_:open:options:) in your AppDelegate (or scene(_:openURLContexts:) for SceneDelegate apps)")
                 }
             }
         }
