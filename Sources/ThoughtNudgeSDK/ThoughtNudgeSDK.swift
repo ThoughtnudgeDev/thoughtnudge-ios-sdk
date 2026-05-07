@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta10"
+    @objc public static let sdkVersion = "2.3.0-beta11"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -175,20 +175,53 @@ import os.log
     @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
     @objc public func handleColdLaunch(launchOptions: [UIApplication.LaunchOptionsKey: Any]?) {
         let optionKeys = launchOptions?.keys.map { String(describing: $0) } ?? []
-        tnLog("handleColdLaunch invoked. launchOptions keys: \(optionKeys)")
+        tnLog("handleColdLaunch (AppDelegate) invoked. launchOptions keys: \(optionKeys)")
 
         guard let userInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] else {
-            tnLog("handleColdLaunch — launchOptions[.remoteNotification] is nil. App was NOT launched from a notification tap (or another framework consumed it before us — see Firebase swizzling notes).")
+            tnLog("handleColdLaunch (AppDelegate) — launchOptions[.remoteNotification] is nil. NOTE: SceneDelegate-based apps (most iOS 13+ apps) deliver cold-launch notification info via SceneDelegate.scene(_:willConnectTo:options:), NOT via launchOptions. Add ThoughtNudgeSDK.shared.handleColdLaunch(connectionOptions:) in your SceneDelegate.")
             return
         }
+        processColdLaunchUserInfo(userInfo, source: "AppDelegate")
+    }
+
+    /// Handle a cold-launch notification tap on apps that use UIScene /
+    /// SceneDelegate (iOS 13+). For those apps, the notification info
+    /// arrives via UIScene.ConnectionOptions, NOT via the AppDelegate's
+    /// launchOptions. Call this from your SceneDelegate's
+    /// `scene(_:willConnectTo:options:)`.
+    ///
+    /// Example:
+    /// ```swift
+    /// func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
+    ///            options connectionOptions: UIScene.ConnectionOptions) {
+    ///     ThoughtNudgeSDK.shared.handleColdLaunch(connectionOptions: connectionOptions)
+    ///     // ... your existing code
+    /// }
+    /// ```
+    @available(iOS 13.0, *)
+    @available(iOSApplicationExtension, unavailable, message: "Call from your main app target only")
+    @objc public func handleColdLaunch(connectionOptions: UIScene.ConnectionOptions) {
+        let hasResponse = connectionOptions.notificationResponse != nil
+        tnLog("handleColdLaunch (SceneDelegate) invoked. notificationResponse: \(hasResponse ? "present" : "nil")")
+
+        guard let response = connectionOptions.notificationResponse else {
+            tnLog("handleColdLaunch (SceneDelegate) — connectionOptions.notificationResponse is nil. App was NOT launched from a notification tap (user opened it some other way).")
+            return
+        }
+        let userInfo = response.notification.request.content.userInfo
+        processColdLaunchUserInfo(userInfo, source: "SceneDelegate")
+    }
+
+    @available(iOSApplicationExtension, unavailable)
+    private func processColdLaunchUserInfo(_ userInfo: [AnyHashable: Any], source: String) {
         let userInfoKeys = userInfo.keys.compactMap { $0 as? String }
-        tnLog("handleColdLaunch — remoteNotification present. userInfo keys: \(userInfoKeys)")
+        tnLog("handleColdLaunch (\(source)) — userInfo keys: \(userInfoKeys)")
 
         guard let messageId = userInfo[messageIdKey] as? String, !messageId.isEmpty else {
-            tnLog("handleColdLaunch — no tn_message_id in launch userInfo. Either the cold-launch notification wasn't a ThoughtNudge push, or the userInfo was stripped before this method ran.")
+            tnLog("handleColdLaunch (\(source)) — no tn_message_id in userInfo. Either the cold-launch notification wasn't a ThoughtNudge push, or the userInfo was stripped before this method ran.")
             return
         }
-        tnLog("Cold-launch from notification tap: \(messageId)")
+        tnLog("Cold-launch from notification tap (\(source)): \(messageId)")
         lastColdLaunchMessageId = messageId
         TNWebhookReporter.reportEvent(eventType: "clicked", messageId: messageId)
         openCtaUrlIfPresent(userInfo: userInfo)
