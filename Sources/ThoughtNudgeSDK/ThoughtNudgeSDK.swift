@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta18"
+    @objc public static let sdkVersion = "2.3.0-beta19"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 

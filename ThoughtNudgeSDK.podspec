@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'ThoughtNudgeSDK'
-  s.version          = '2.3.0-beta18'
+  s.version          = '2.3.0-beta19'
   s.summary          = 'ThoughtNudge Push Notification SDK for iOS'
   s.description      = <<-DESC
     iOS SDK for ThoughtNudge push notifications. Registers for APNs directly
@@ -20,14 +20,4 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = '14.0'
   s.source_files     = 'Sources/ThoughtNudgeSDK/**/*.swift'
   s.frameworks       = 'UIKit', 'UserNotifications'
-
-  # Build for all standard architectures including arm64 simulator (required
-  # for Apple Silicon Macs running iOS Simulator). Just clear any
-  # EXCLUDED_ARCHS that may have been inherited from the host project's
-  # Podfile/xcconfig — a common leftover from pre-Xcode 12 setups. ARCHS
-  # and VALID_ARCHS use Xcode defaults (ARCHS_STANDARD includes arm64 + x86_64
-  # for simulator and arm64 for device).
-  s.pod_target_xcconfig = {
-    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => '',
-  }
 end
