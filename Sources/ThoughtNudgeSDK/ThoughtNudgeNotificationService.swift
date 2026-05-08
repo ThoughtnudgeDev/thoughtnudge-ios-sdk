@@ -138,7 +138,7 @@ import os.log
     // MARK: - Internal
 
     private func reportDelivered(messageId: String, userId: String, appId: String) {
-        guard let url = URL(string: "\(environment.url)/notifications/event/") else { return }
+        guard let url = URL(string: "\(environment.url)/notifications/event") else { return }
         let body: [String: String] = [
             "event_type": "delivered",
             "message_id": messageId,

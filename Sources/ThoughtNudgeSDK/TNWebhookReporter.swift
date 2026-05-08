@@ -18,7 +18,7 @@ internal class TNWebhookReporter {
             return
         }
 
-        let urlString = "\(sdk.apiBaseUrl)/notifications/event/"
+        let urlString = "\(sdk.apiBaseUrl)/notifications/event"
         tnLog("reportEvent dispatching POST to \(urlString) — eventType=\(eventType), messageId=\(messageId), userId=\(sdk.userId), appId=\(sdk.appId)")
         post(
             url: urlString,

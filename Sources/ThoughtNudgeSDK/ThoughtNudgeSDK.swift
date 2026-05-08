@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta15"
+    @objc public static let sdkVersion = "2.3.0-beta16"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -262,7 +262,7 @@ import os.log
         guard initialized else { return }
         if let token = UserDefaults.standard.string(forKey: apnsTokenKey) {
             TNWebhookReporter.post(
-                url: "\(apiBaseUrl)/notifications/deregister-token/",
+                url: "\(apiBaseUrl)/notifications/deregister-token",
                 body: ["token": token]
             )
         }
@@ -434,7 +434,7 @@ import os.log
         guard !userId.isEmpty, !apiBaseUrl.isEmpty else { return }
         UserDefaults.standard.set(token, forKey: apnsTokenKey)
         TNWebhookReporter.post(
-            url: "\(apiBaseUrl)/notifications/register-token/",
+            url: "\(apiBaseUrl)/notifications/register-token",
             body: [
                 "user_id": userId,
                 "token": token,
