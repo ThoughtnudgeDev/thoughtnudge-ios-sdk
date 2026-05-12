@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0-beta19"
+    @objc public static let sdkVersion = "2.3.0"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -77,7 +77,7 @@ import os.log
 
         internal var url: String {
             switch self {
-            case .production:  return "https://api.thoughtnudge.com"
+            case .production:  return "https://integrations.thoughtnudge.com/event-service"
             case .staging:     return "https://staging-api.thoughtnudge.com"
             case .development: return "https://integrations.thoughtnudge.com/event-service"
             }
