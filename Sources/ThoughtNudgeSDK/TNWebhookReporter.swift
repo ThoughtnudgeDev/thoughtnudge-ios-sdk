@@ -32,7 +32,7 @@ internal class TNWebhookReporter {
         )
     }
 
-    static func post(url: String, body: [String: String]) {
+    static func post(url: String, body: [String: String], onSuccess: (() -> Void)? = nil) {
         guard let requestUrl = URL(string: url) else {
             tnLog("Invalid URL: \(url)")
             return
@@ -57,6 +57,10 @@ internal class TNWebhookReporter {
             }
             if let httpResponse = response as? HTTPURLResponse {
                 tnLog("API response for \(url): HTTP \(httpResponse.statusCode)")
+                // Only signal success on a 2xx so a failed call is retried later.
+                if (200...299).contains(httpResponse.statusCode) {
+                    onSuccess?()
+                }
             } else {
                 tnLog("API completed for \(url) with no HTTP response object")
             }

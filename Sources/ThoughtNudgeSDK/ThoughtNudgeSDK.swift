@@ -56,7 +56,7 @@ import os.log
 
     /// SDK version — logged on init() so you can verify in Console.app
     /// which build is actually running on the device.
-    @objc public static let sdkVersion = "2.3.0"
+    @objc public static let sdkVersion = "2.4.0"
 
     private static let osLog = OSLog(subsystem: "com.thoughtnudge.sdk", category: "main")
 
@@ -91,6 +91,10 @@ import os.log
     private let userIdKey = "tn_user_id"
     private let apnsTokenKey = "tn_apns_token"
     private let messageIdKey = "tn_message_id"
+    // Last (token, user) pair successfully registered with the backend, used to
+    // skip redundant /register-token calls on every app launch.
+    private let registeredTokenKey = "tn_registered_token"
+    private let registeredUserKey = "tn_registered_user"
 
     private var initialized = false
     private var pendingUserId: String?
@@ -269,6 +273,8 @@ import os.log
         userId = ""
         UserDefaults.standard.removeObject(forKey: userIdKey)
         UserDefaults.standard.removeObject(forKey: apnsTokenKey)
+        UserDefaults.standard.removeObject(forKey: registeredTokenKey)
+        UserDefaults.standard.removeObject(forKey: registeredUserKey)
         tnLog("User logged out, token deregistered")
     }
 
@@ -433,6 +439,20 @@ import os.log
     internal func registerToken(token: String) {
         guard !userId.isEmpty, !apiBaseUrl.isEmpty else { return }
         UserDefaults.standard.set(token, forKey: apnsTokenKey)
+
+        // Skip the network call if this exact (token, user) pair is already
+        // registered. Without this guard the SDK re-POSTs an unchanged token on
+        // every app launch, generating large volumes of redundant calls and
+        // backend egress cost. We only register on first run, token change,
+        // or a user change.
+        let lastToken = UserDefaults.standard.string(forKey: registeredTokenKey)
+        let lastUser = UserDefaults.standard.string(forKey: registeredUserKey)
+        if token == lastToken, userId == lastUser {
+            tnLog("APNs token unchanged for current user, skipping re-register")
+            return
+        }
+
+        let registeredUser = userId
         TNWebhookReporter.post(
             url: "\(apiBaseUrl)/notifications/register-token",
             body: [
@@ -441,7 +461,11 @@ import os.log
                 "platform": "ios",
                 "app_id": appId
             ]
-        )
-        tnLog("APNs token registered with backend")
+        ) {
+            // Persist the marker only after a successful response.
+            UserDefaults.standard.set(token, forKey: self.registeredTokenKey)
+            UserDefaults.standard.set(registeredUser, forKey: self.registeredUserKey)
+            self.tnLog("APNs token registered with backend")
+        }
     }
 }
